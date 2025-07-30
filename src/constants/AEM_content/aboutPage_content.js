@@ -1,71 +1,45 @@
-// useAboutPageContent.js
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 const useAboutPageContent = () => {
-  const [aboutData, setAboutData] = useState({
-    "Welcome-text": null,
-    "Welcome-description": null,
-    "Welcome-content": null,
-    loading: true,
-    error: null
-  });
+  const [pageData, setPageData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchAboutPageData = async () => {
+    const url =
+      "http://localhost:3001/api/content/concentrixpartnersandboxprogram/us/en/about-page.model.json";
+
+    try {
+      setLoading(true);
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setPageData(data);
+      setError(null);
+    } catch (error) {
+      console.error("Error fetching about page:", error);
+      setError("Failed to load page content. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const getWelcomeContent = async () => {
-      try {
-        setAboutData(prev => ({ ...prev, loading: true, error: null }));
-        
-        const response = await fetch("https://publish-p92368-e968987.adobeaemcloud.com/content/concentrixpartnersandboxprogram/us/en/about-page.model.json");
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        const result = {};
-        const targetIds = ['Welcome-text', 'Welcome-description', 'Welcome-content'];
-        
-        function findById(obj) {
-          if (!obj || typeof obj !== 'object') return;
-          
-          if (obj.id && targetIds.includes(obj.id)) {
-            result[obj.id] = obj.text || obj.value || obj.content || obj;
-          }
-          
-          Object.values(obj).forEach(value => {
-            if (typeof value === 'object') findById(value);
-          });
-        }
-        
-        findById(data);
-        
-        const output = {
-          "Welcome-text": result["Welcome-text"] || null,
-          "Welcome-description": result["Welcome-description"] || null,
-          "Welcome-content": result["Welcome-content"] || null,
-          loading: false,
-          error: null
-        };
-        
-        setAboutData(output);
-        console.log("Fetched content:", JSON.stringify(output, null, 2));
-        
-      } catch (error) {
-        console.error("Error fetching content:", error);
-        setAboutData({
-          "Welcome-text": null,
-          "Welcome-description": null,
-          "Welcome-content": null,
-          loading: false,
-          error: error.message
-        });
-      }
-    };
-
-    getWelcomeContent();
+    fetchAboutPageData();
+    // eslint-disable-next-line
   }, []);
 
-  return aboutData;
+  return { pageData, loading, error, refetch: fetchAboutPageData };
 };
 
 export default useAboutPageContent;

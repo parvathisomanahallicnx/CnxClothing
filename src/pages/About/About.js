@@ -11,6 +11,7 @@ const About = () => {
   // Use the custom hook
   const { pageData, loading, error, refetch } = useAboutPageData();
 
+
   useEffect(() => {
     setPrevLocation(location.state?.data || "");
   }, [location]);
@@ -100,72 +101,16 @@ const About = () => {
   };
 
   const tabs = pageData ? extractTabs(pageData) : [];
-
   console.log("Extracted tabs:", JSON.stringify(tabs, null, 2));
-
-  // const tabs = [
-  //   {
-  //     id: "who-we-are",
-  //     label: "Who We Are",
-  //     content: {
-  //       title: "Who We Are",
-  //       description: "CnxClothing is a premier fashion destination that has been redefining style and elegance since our inception. We are passionate about bringing you the latest trends while maintaining timeless sophistication.",
-  //       details: [
-  //         "Founded with a vision to make fashion accessible to everyone",
-  //         "A team of dedicated fashion enthusiasts and industry experts",
-  //         "Committed to quality, style, and customer satisfaction",
-  //         "Serving customers worldwide with premium clothing collections",
-  //       ],
-  //     },
-  //   },
-  //   {
-  //     id: "what-we-do",
-  //     label: "What We Do",
-  //     content: {
-  //       title: "What We Do",
-  //       description: "We curate and design exceptional clothing collections that blend contemporary fashion with classic elegance. Our mission is to empower individuals through style.",
-  //       details: [
-  //         "Design and manufacture high-quality clothing for all occasions",
-  //         "Source premium materials from trusted suppliers globally",
-  //         "Provide personalized styling advice and customer support",
-  //         "Offer seamless online shopping experience with fast delivery",
-  //       ],
-  //     },
-  //   },
-  //   {
-  //     id: "our-place",
-  //     label: "Our Place",
-  //     content: {
-  //       title: "Our Place in Fashion",
-  //       description:
-  //         "We've established ourselves as a trusted name in the fashion industry, bridging the gap between luxury and accessibility while maintaining our commitment to excellence.",
-  //       details: [
-  //         "Recognized leader in contemporary fashion retail",
-  //         "Strong presence in both online and offline markets",
-  //         "Partnerships with renowned designers and brands",
-  //         "Growing community of fashion-forward customers worldwide",
-  //       ],
-  //     },
-  //   },
-  //   {
-  //     id: "our-impact",
-  //     label: "Our Impact",
-  //     content: {
-  //       title: "Our Impact",
-  //       description:
-  //         "We believe in making a positive difference in the world through sustainable practices, ethical sourcing, and community engagement.",
-  //       details: [
-  //         "Committed to sustainable and eco-friendly manufacturing processes",
-  //         "Supporting local artisans and fair trade practices",
-  //         "Reducing environmental footprint through responsible packaging",
-  //         "Contributing to community development and social causes",
-  //       ],
-  //     },
-  //   },
-  // ];
 
   const activeTabContent = tabs.find((tab) => tab.id === activeTab);
 
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+    // eslint-disable-next-line
+  }, [tabs]);
   if (loading) {
     return (
       <div className="max-w-container mx-auto px-4">
