@@ -599,7 +599,10 @@ const ChatWidget = () => {
     const variantIds = selectedDetails.map((d) => d.variantId).join(", ");
     // Always use dummy email for orders
     const loggedInUserEmail = "kiran@gmail.com";
-    const orderMessage ='Order These products: variant ID = ' + variantIds + ', email = "kiran@gmail.com"';
+    const orderMessage =
+      "Order These products: variant ID = " +
+      variantIds +
+      ', email = "kiran@gmail.com"';
     // Call the product search API as the order API
     try {
       const response = await fetch(
@@ -620,98 +623,333 @@ const ChatWidget = () => {
       );
       const data = await response.json();
       console.log("Order API Response:", data); // Debug log
+      console.log("Response type:", typeof data.response); // Debug log
+      console.log("Response content:", data.response); // Debug log
 
       let orderResultObj = data;
       if (typeof data.response === "string") {
         try {
-          orderResultObj = JSON.parse(data.response);
-          console.log("Parsed order result:", orderResultObj); // Debug log
+          // First, try to parse the response string as JSON
+          const parsedResponse = JSON.parse(data.response);
+          console.log("Parsed response string:", parsedResponse); // Debug log
+
+          // Check if the parsed response contains order_created or order
+          if (parsedResponse.order_created) {
+            orderResultObj = parsedResponse;
+            console.log(
+              "Found order_created in parsed response, setting orderResultObj to:",
+              orderResultObj
+            );
+          } else if (parsedResponse.order) {
+            // Convert order format to order_created format for consistency
+            orderResultObj = {
+              order_created: {
+                id: Date.now(), // Generate a temporary ID
+                order_id: `#${Math.floor(Math.random() * 10000)}`, // Generate a temporary order ID
+                product: "Order details", // Generic product name
+                total_paid: "Check order details", // Generic total
+                message: "Order placed successfully!",
+                order_data: parsedResponse.order, // Store the original order data
+              },
+            };
+            console.log(
+              "Found order in parsed response, converted to order_created format:",
+              orderResultObj
+            );
+          } else {
+            // If no order_created or order in parsed response, keep the original structure
+            orderResultObj = {
+              ...data,
+              response: parsedResponse,
+            };
+            console.log(
+              "No order_created or order found, keeping original structure:",
+              orderResultObj
+            );
+          }
+          console.log("Final order result object:", orderResultObj); // Debug log
         } catch (e) {
           console.error("Error parsing response:", e); // Debug log
           orderResultObj = data;
         }
       }
 
-      // Check if order was created successfully - handle different response formats
+      // Simplified order data extraction - extract directly from response
       let orderData = null;
+      console.log("Starting simplified order data extraction..."); // Debug log
 
-      if (orderResultObj.order_created) {
-        orderData = orderResultObj.order_created;
-      } else if (orderResultObj.response) {
-        try {
-          const parsedResponse = JSON.parse(orderResultObj.response);
-          if (parsedResponse.order_created) {
-            orderData = parsedResponse.order_created;
+      // Function to extract order data from any response format
+      const extractOrderData = (responseObj) => {
+        console.log("Extracting from:", responseObj); // Debug log
+        console.log("responseObj type:", typeof responseObj); // Debug log
+        console.log("responseObj keys:", Object.keys(responseObj || {})); // Debug log
+
+        // Check for order_created
+        if (responseObj.order_created) {
+          console.log("Found order_created:", responseObj.order_created); // Debug log
+          return responseObj.order_created;
+        }
+
+        // Check for order
+        if (responseObj.order) {
+          console.log("Found order:", responseObj.order); // Debug log
+          const orderObj = responseObj.order;
+          return {
+            id: Date.now(),
+            order_id: `#${Math.floor(Math.random() * 10000)}`,
+            product: `Order with ${orderObj.line_items?.length || 0} items`,
+            total_paid: "Check order details",
+            message: "Order placed successfully!",
+            order_data: orderObj,
+          };
+        }
+
+        console.log("No order_created or order found in responseObj"); // Debug log
+        return null;
+      };
+
+      // Try to extract from the main response object
+      orderData = extractOrderData(orderResultObj);
+
+      // If not found, try to extract from the response field
+      if (!orderData && orderResultObj.response) {
+        console.log(
+          "Trying to extract from response field:",
+          orderResultObj.response
+        ); // Debug log
+
+        // If response is a string, try to parse it
+        if (typeof orderResultObj.response === "string") {
+          try {
+            const parsedResponse = JSON.parse(orderResultObj.response);
+            console.log("Parsed response:", parsedResponse); // Debug log
+            console.log("Parsed response type:", typeof parsedResponse); // Debug log
+            console.log(
+              "Parsed response keys:",
+              Object.keys(parsedResponse || {})
+            ); // Debug log
+            orderData = extractOrderData(parsedResponse);
+          } catch (e) {
+            console.log("Failed to parse response as JSON:", e); // Debug log
           }
-        } catch (e) {
-          console.error("Error parsing response.order_created:", e);
+        } else if (typeof orderResultObj.response === "object") {
+          // If response is already an object
+          console.log("Response is already an object"); // Debug log
+          orderData = extractOrderData(orderResultObj.response);
         }
       }
+
+      console.log("Final extracted orderData:", orderData); // Debug log
 
       if (orderData) {
         console.log("Order created successfully:", orderData); // Debug log
 
         setMessages((msgs) => {
           let newMsgs = [...msgs];
-          while (newMsgs.length && newMsgs[newMsgs.length - 1].isLoading) {
-            newMsgs.pop();
-          }
-          newMsgs.push({
+          // Remove any loading messages
+          newMsgs = newMsgs.filter((msg) => !msg.isLoading);
+          const orderMessage = {
             from: "bot",
             isOrderCreated: true,
             orderCreatedObj: orderData,
-          });
+          };
+          console.log("Adding order message:", orderMessage); // Debug log
+          newMsgs.push(orderMessage);
           newMsgs.push({
             from: "bot",
             text: "You can search for more products by entering a query below.",
           });
+          console.log("Final messages array:", newMsgs); // Debug log
           return newMsgs;
         });
         setOrderResult(null);
-      } else {
-        console.log("Order creation failed:", orderResultObj); // Debug log
 
-        // Try to extract order information from the response even if parsing failed
+        // Reset order-related state for next order
+        setSelectedVariants([]);
+        setOrderedVariantsDetails([]);
+        setShowProductGrid(false);
+      } else {
+        console.log("Order creation failed - orderData is null"); // Debug log
+        console.log("orderResultObj:", orderResultObj); // Debug log
+
+        // Try to extract order information from the response as a last resort
+        let fallbackOrderData = null;
         if (orderResultObj.response) {
           try {
             const responseText = orderResultObj.response;
+            console.log("Last resort: checking response text:", responseText);
+
+            // If responseText is a JSON string, try to parse it
             if (
-              responseText.includes("order_created") &&
-              responseText.includes("id")
+              typeof responseText === "string" &&
+              responseText.trim().startsWith("{")
             ) {
-              // Show a generic success message with the response
-              setMessages((msgs) => {
-                let newMsgs = [...msgs];
-                while (
-                  newMsgs.length &&
-                  newMsgs[newMsgs.length - 1].isLoading
-                ) {
-                  newMsgs.pop();
+              try {
+                // First, try to clean the response text by handling escaped quotes
+                let cleanedResponseText = responseText;
+
+                // Handle escaped quotes in the message field
+                cleanedResponseText = cleanedResponseText.replace(/\\"/g, '"');
+
+                console.log("Cleaned response text:", cleanedResponseText);
+
+                const parsedText = JSON.parse(cleanedResponseText);
+                console.log("Parsed response text as JSON:", parsedText);
+
+                if (parsedText.order_created) {
+                  fallbackOrderData = parsedText.order_created;
+                  console.log(
+                    "Found order_created in fallback parsing:",
+                    fallbackOrderData
+                  );
                 }
-                newMsgs.push({
-                  from: "bot",
-                  text: "Order placed successfully! Check the response details in the console for order information.",
-                });
-                return newMsgs;
-              });
-              setOrderResult(null);
-              return;
+              } catch (e) {
+                console.log("Failed to parse response as JSON in fallback:", e);
+
+                // Try alternative parsing approach
+                try {
+                  console.log("Trying alternative parsing approach...");
+
+                  // Use regex to extract order data directly from the response text
+                  const orderCreatedMatch = responseText.match(
+                    /"order_created":\s*({[^}]+})/
+                  );
+                  if (orderCreatedMatch) {
+                    console.log(
+                      "Found order_created match:",
+                      orderCreatedMatch[1]
+                    );
+
+                    // Extract individual fields using regex
+                    const idMatch = responseText.match(/"id":\s*(\d+)/);
+                    const orderIdMatch =
+                      responseText.match(/"order_id":\s*(\d+)/);
+                    const productMatch = responseText.match(
+                      /"product":\s*"([^"]+)"/
+                    );
+                    const totalPaidMatch = responseText.match(
+                      /"total_paid":\s*"([^"]+)"/
+                    );
+                    const messageMatch = responseText.match(
+                      /"message":\s*"([^"]+)"/
+                    );
+
+                    if (idMatch || orderIdMatch) {
+                      fallbackOrderData = {
+                        id: idMatch ? idMatch[1] : null,
+                        order_id: orderIdMatch ? orderIdMatch[1] : null,
+                        product: productMatch
+                          ? productMatch[1]
+                          : "Product details",
+                        total_paid: totalPaidMatch
+                          ? totalPaidMatch[1]
+                          : "Price details",
+                        message: messageMatch
+                          ? messageMatch[1]
+                          : "Order placed successfully!",
+                      };
+                      console.log(
+                        "Extracted order data using regex:",
+                        fallbackOrderData
+                      );
+                    }
+                  } else {
+                    console.log(
+                      "No order_created match found in response text"
+                    );
+                  }
+                } catch (e2) {
+                  console.log("Alternative parsing also failed:", e2);
+                }
+              }
             }
           } catch (e) {
-            console.error("Error processing response:", e);
+            console.error("Error in fallback processing:", e);
           }
         }
 
-        setOrderResult(
-          orderResultObj.message || "Failed to place order. Please try again."
-        );
+        if (fallbackOrderData) {
+          console.log("Fallback order data found, showing order details"); // Debug log
+          // Show order details if we found them in fallback
+          setMessages((msgs) => {
+            let newMsgs = [...msgs];
+            // Remove any loading messages
+            newMsgs = newMsgs.filter((msg) => !msg.isLoading);
+            const orderMessage = {
+              from: "bot",
+              isOrderCreated: true,
+              orderCreatedObj: fallbackOrderData,
+            };
+            console.log("Adding fallback order message:", orderMessage);
+            console.log("Fallback order message structure:", {
+              from: orderMessage.from,
+              isOrderCreated: orderMessage.isOrderCreated,
+              orderCreatedObj: orderMessage.orderCreatedObj,
+            });
+            newMsgs.push(orderMessage);
+            newMsgs.push({
+              from: "bot",
+              text: "You can search for more products by entering a query below.",
+            });
+            console.log("Final fallback messages array:", newMsgs); // Debug log
+            return newMsgs;
+          });
+          setOrderResult(null);
+        } else {
+          console.log("No fallback order data found, showing failure message"); // Debug log
+          // Show order failed message and continue shopping prompt
+          setMessages((msgs) => {
+            let newMsgs = [...msgs];
+            // Remove any loading messages
+            newMsgs = newMsgs.filter((msg) => !msg.isLoading);
+            newMsgs.push({
+              from: "bot",
+              text: "Order didn't place. Please try again.",
+            });
+            newMsgs.push({
+              from: "bot",
+              text: "You can search for more products by entering a query below.",
+            });
+            return newMsgs;
+          });
+          setOrderResult(null); // Reset order result
+        }
+
+        // Reset order-related state for next order
+        setSelectedVariants([]);
+        setOrderedVariantsDetails([]);
+        setShowProductGrid(false);
       }
     } catch (error) {
+      console.error("Order API error:", error);
       setOrderResult("Failed to place order. Please try again.");
+
+      // Show error message and reset state
+      setMessages((msgs) => {
+        let newMsgs = [...msgs];
+        // Remove any loading messages
+        newMsgs = newMsgs.filter((msg) => !msg.isLoading);
+        newMsgs.push({
+          from: "bot",
+          text: "Order didn't place. Please try again.",
+        });
+        newMsgs.push({
+          from: "bot",
+          text: "You can search for more products by entering a query below.",
+        });
+        return newMsgs;
+      });
+
+      // Reset order-related state
+      setSelectedVariants([]);
+      setOrderedVariantsDetails([]);
+      setShowProductGrid(false);
     }
+
+    // Always reset ordering state
     setOrdering(false);
-    // Optionally, clear selected variants after ordering
-    // setSelectedVariants([]);
+    // Reset order result after all processing
+    setOrderResult(null);
   };
 
   // Handler to go back to main menu
@@ -754,26 +992,42 @@ const ChatWidget = () => {
   );
 
   // Helper to render order created card
-  const renderOrderCreatedCard = (order) => (
-    <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md">
-      <div className="font-semibold text-green-900 mb-2">
-        Order Placed Successfully!
+  const renderOrderCreatedCard = (order) => {
+    console.log("Rendering order created card with data:", order); // Debug log
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md">
+        <div className="font-semibold text-green-900 mb-2">
+          Order Placed Successfully!
+        </div>
+        <div className="text-green-900 mb-1">
+          Track ID: <span className="font-medium">{order.id || "N/A"}</span>
+        </div>
+        <div className="text-green-900 mb-1">
+          Order ID:{" "}
+          <span className="font-medium">{order.order_id || "N/A"}</span>
+        </div>
+        <div className="text-green-900 mb-1">
+          Product: <span className="font-medium">{order.product || "N/A"}</span>
+        </div>
+        <div className="text-green-900 mb-1">
+          Total Paid:{" "}
+          <span className="font-medium">{order.total_paid || "N/A"}</span>
+        </div>
+        <div className="text-green-900 mt-2">
+          {order.message || "Order details available"}
+        </div>
+        {/* Show order details if available */}
+        {order.order_data && (
+          <div className="text-green-900 mt-3 text-sm">
+            <div className="font-medium mb-1">Order Details:</div>
+            <div>Customer: {order.order_data.customer?.email || "N/A"}</div>
+            <div>Status: {order.order_data.financial_status || "N/A"}</div>
+            <div>Items: {order.order_data.line_items?.length || 0}</div>
+          </div>
+        )}
       </div>
-      <div className="text-green-900 mb-1">
-        Track ID: <span className="font-medium">{order.id}</span>
-      </div>
-      <div className="text-green-900 mb-1">
-        Order ID: <span className="font-medium">{order.order_id}</span>
-      </div>
-      <div className="text-green-900 mb-1">
-        Product: <span className="font-medium">{order.product}</span>
-      </div>
-      <div className="text-green-900 mb-1">
-        Total Paid: <span className="font-medium">{order.total_paid}</span>
-      </div>
-      <div className="text-green-900 mt-2">{order.message}</div>
-    </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -858,21 +1112,35 @@ const ChatWidget = () => {
                                 CNX AI
                               </span>
                             </div>
-                            {msg.isOrderCreated && msg.orderCreatedObj ? (
-                              renderOrderCreatedCard(msg.orderCreatedObj)
-                            ) : msg.isOrderStatus && msg.orderObj ? (
-                              renderOrderStatusCard(msg.orderObj)
-                            ) : msg.from === "bot" &&
-                              msg.text &&
-                              msg.text.match(/[#*\-`]/) ? (
-                              <span className="inline-block px-5 py-3 rounded-2xl font-bodyFont text-base bg-white text-blue-900 shadow-md max-w-[540px] whitespace-pre-line">
-                                <ReactMarkdown>{msg.text}</ReactMarkdown>
-                              </span>
-                            ) : (
-                              <span className="inline-block px-5 py-3 rounded-2xl font-bodyFont text-base bg-white text-blue-900 shadow-md max-w-[540px] whitespace-pre-line">
-                                {msg.text}
-                              </span>
-                            )}
+                            {(() => {
+                              console.log("Rendering message:", msg); // Debug log
+                              if (msg.isOrderCreated && msg.orderCreatedObj) {
+                                console.log("Rendering order created card"); // Debug log
+                                return renderOrderCreatedCard(
+                                  msg.orderCreatedObj
+                                );
+                              } else if (msg.isOrderStatus && msg.orderObj) {
+                                return renderOrderStatusCard(msg.orderObj);
+                              } else if (
+                                msg.from === "bot" &&
+                                msg.text &&
+                                msg.text.match(/[#*\-`]/)
+                              ) {
+                                return (
+                                  <span className="inline-block px-5 py-3 rounded-2xl font-bodyFont text-base bg-white text-blue-900 shadow-md max-w-[540px] whitespace-pre-line">
+                                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                  </span>
+                                );
+                              } else if (msg.text) {
+                                return (
+                                  <span className="inline-block px-5 py-3 rounded-2xl font-bodyFont text-base bg-white text-blue-900 shadow-md max-w-[540px] whitespace-pre-line">
+                                    {msg.text}
+                                  </span>
+                                );
+                              } else {
+                                return null;
+                              }
+                            })()}
                             {/* Insert product grid immediately after the search result message */}
                             {(msg.text ===
                               "Here are the products matching your search:" ||
