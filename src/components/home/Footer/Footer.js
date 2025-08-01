@@ -161,18 +161,26 @@ const Footer = () => {
                 My Account
               </li>
             </Link>
-            <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
-              Order Tracking
-            </li>
-            <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
-              Size Guide
-            </li>
-            <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
-              Return Policy
-            </li>
-            <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
-              Shipping Info
-            </li>
+            <Link to="/orders">
+              <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
+                Order Tracking
+              </li>
+            </Link>
+            <Link to="/orders">
+              <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
+                Size Guide
+              </li>
+            </Link>
+            <Link to="/policies">
+              <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
+                Return Policy
+              </li>
+            </Link>
+            <Link to="/orders">
+              <li className="font-titleFont text-base text-lightText hover:text-black hover:underline decoration-[1px] decoration-gray-500 underline-offset-2 cursor-pointer duration-300">
+                Shipping Info
+              </li>
+            </Link>
           </ul>
         </div>
 
@@ -240,59 +248,6 @@ const Footer = () => {
           </div>
         </div>
       </div>
-
-      {/* Bottom Footer */}
-      {/* <div className="max-w-container mx-auto px-4 mt-16 pt-8 border-t border-gray-300">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-center md:text-left">
-            <p className="text-sm text-lightText">
-              © 2024 CNX Store Private Limited. All rights reserved.
-            </p>
-            <p className="text-xs text-lightText mt-1">
-              CIN: U52100DL2018PTC334567 | GST: 07AABCC1234M1Z5
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap justify-center gap-4 text-sm">
-            <Link to="/about" className="text-lightText hover:text-primeColor duration-300">
-              About Us
-            </Link>
-            <span className="text-gray-400">|</span>
-            <a href="#" className="text-lightText hover:text-primeColor duration-300">
-              Privacy Policy
-            </a>
-            <span className="text-gray-400">|</span>
-            <a href="#" className="text-lightText hover:text-primeColor duration-300">
-              Terms of Service
-            </a>
-            <span className="text-gray-400">|</span>
-            <a href="tel:18001234567" className="text-lightText hover:text-primeColor duration-300">
-              Contact Support
-            </a>
-          </div>
-        </div>
-
-        <div className="mt-6 text-center">
-          <div className="flex flex-wrap justify-center items-center gap-6 text-xs text-lightText">
-            <div className="flex items-center gap-1">
-              <span className="text-green-600">✓</span>
-              <span>2M+ Happy Customers</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-green-600">✓</span>
-              <span>Same Day Delivery</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-green-600">✓</span>
-              <span>96% Customer Satisfaction</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-green-600">✓</span>
-              <span>1000+ Brand Partners</span>
-            </div>
-          </div>
-        </div>
-      </div> */}
     </div>
   );
 };

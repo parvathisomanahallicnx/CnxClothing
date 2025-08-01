@@ -1,15 +1,16 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Slider from "react-slick";
-import {
-  bannerImgOne,
-  bannerImgTwo,
-  bannerImgThree,
-} from "../../assets/images";
+import useHomePageContent from "../../constants/AEM_content/homePage_content";
 import Image from "../designLayouts/Image";
 
 const Banner = () => {
   const [dotActive, setDocActive] = useState(0);
+  const { pageData, loading, error } = useHomePageContent();
+
+  // Extract banners from AEM data
+  const banners = pageData ? extractBannerImages(pageData) : [];
+
   const settings = {
     dots: true,
     infinite: true,
@@ -17,9 +18,7 @@ const Banner = () => {
     slidesToShow: 1,
     slidesToScroll: 1,
     arrows: false,
-    beforeChange: (prev, next) => {
-      setDocActive(next);
-    },
+    beforeChange: (prev, next) => setDocActive(next),
     appendDots: (dots) => (
       <div
         style={{
@@ -99,27 +98,51 @@ const Banner = () => {
       },
     ],
   };
+
+  if (loading) return <div>Loading banners...</div>;
+  if (error) return <div>{error}</div>;
+
   return (
     <div className="w-full bg-white">
       <Slider {...settings}>
-        <Link to="/offer">
-          <div>
-            <Image imgSrc={bannerImgOne} />
-          </div>
-        </Link>
-        <Link to="/offer">
-          <div>
-            <Image imgSrc={bannerImgTwo} />
-          </div>
-        </Link>
-        <Link to="/offer">
-          <div>
-            <Image imgSrc={bannerImgThree} />
-          </div>
-        </Link>
+        {banners.map((banner) => (
+          <Link to="/offer" key={banner.id}>
+            <div>
+              <Image imgSrc={banner.src} alt={banner.alt} />
+            </div>
+          </Link>
+        ))}
       </Slider>
     </div>
   );
 };
 
+function extractBannerImages(pageData) {
+  const AEM_DOMAIN = "https://publish-p92368-e968987.adobeaemcloud.com";
+  try {
+    const heroBanner =
+      pageData[":items"]?.root?.[":items"]?.container?.[":items"]?.container?.[":items"]?.["hero banner"];
+    if (!heroBanner || !heroBanner[":itemsOrder"]) return [];
+    return heroBanner[":itemsOrder"]
+      .map((bannerKey) => {
+        const banner = heroBanner[":items"]?.[bannerKey];
+        const imageObj = banner?.[":items"]?.image;
+        let src = imageObj?.src || "";
+        // Prepend domain if src is relative
+        if (src && src.startsWith("/")) {
+          src = AEM_DOMAIN + src;
+        }
+        return imageObj
+          ? {
+              src,
+              alt: imageObj.alt || "",
+              id: imageObj.id,
+            }
+          : null;
+      })
+      .filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
 export default Banner;
