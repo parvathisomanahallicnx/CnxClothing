@@ -93,6 +93,10 @@ const ChatWidget = () => {
     if (!context) return;
     // --- Product Search Flow ---
     if (context === "products") {
+      // Clear previous order details when starting a new search
+      setOrderedVariantsDetails([]);
+      setOrderResult(null);
+      
       // Add user message and a bot loading message
       setMessages((msgs) => [
         ...msgs,
