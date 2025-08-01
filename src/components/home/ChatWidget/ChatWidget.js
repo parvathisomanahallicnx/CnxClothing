@@ -59,12 +59,16 @@ const ChatWidget = () => {
     setSelectedOption(option.value);
     setProducts([]);
     setSelectedVariants([]);
+    setOrderedVariantsDetails([]);
+    setOrderResult(null);
+    setShowProductGrid(false);
+    
+    // Clear all messages and start fresh for the new context
     if (option.value === "products") {
       setMessages([
         { from: "bot", text: "Please enter your search to find products." },
       ]);
     } else if (option.value === "orders_status") {
-      // Always clear all messages and show only the order ID prompt
       setMessages([
         {
           from: "bot",
@@ -78,7 +82,6 @@ const ChatWidget = () => {
           text: "How can I assist you? Please enter your query below.",
         },
       ]);
-      return;
     }
   };
 
@@ -180,7 +183,7 @@ const ChatWidget = () => {
             variants: [
               {
                 id: 46818115715289,
-                title: 'Lithograph - Height: 9" x Width: 12"',
+                title: "Extra Small",
                 price: "25.00",
               },
               { id: 46818115748057, title: "Small", price: "19.99" },
@@ -198,7 +201,7 @@ const ChatWidget = () => {
             title: "Black Beanbag",
             product_type: "Indoor",
             variants: [
-              { id: 46818113716441, title: "Default Title", price: "69.99" },
+              { id: 46818113716441, title: "Plain", price: "69.99" },
             ],
             images: [
               {
@@ -224,12 +227,16 @@ const ChatWidget = () => {
             newMsgs[lastLoadingIdx] = {
               from: "bot",
               text: "Here are the products matching your search:",
+              searchResults: products, // Store products in the message
+              searchQuery: userInput, // Store the search query
             };
           } else {
             // Using fallback products
             newMsgs[lastLoadingIdx] = {
               from: "bot",
               text: "Sorry, No products found for your search. Here are some products for you to choose from",
+              searchResults: products, // Store fallback products in the message
+              searchQuery: userInput, // Store the search query
             };
           }
         }
@@ -238,7 +245,6 @@ const ChatWidget = () => {
       return;
     }
     if (context === "orders_status") {
-      const apiUrl = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
       // Order Status: send order ID as message
       // Show loading message
       setMessages((msgs) => [
@@ -252,37 +258,54 @@ const ChatWidget = () => {
       ]);
       setInput("");
       try {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": "sk-default-boDM8Mx36JzOUjac0cpKiTucrg0p853x",
-          },
-          body: JSON.stringify({
-            user_id: "parvathi.somanahalli@gmail.com",
-            agent_id: "6880f7a1172d1544aaa2f698",
-            session_id: "6880f7a1172d1544aaa2f698-49xbpm1oky",
-            message: userInput, // order ID
-          }),
-        });
+        // Call the webhook to get order status
+        const response = await fetch(
+          "https://somanparv.app.n8n.cloud/webhook/order-status-shopify",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `query=Track my order ${userInput}`,
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
-        let statusMsg =
-          data.message || data.status || data.body || JSON.stringify(data);
-        // Try to parse and style order status if possible
+        console.log("Order Status Webhook Response:", data);
+        
+        // Extract order status from the webhook response
         let orderObj = null;
         let isOrderStatus = false;
-        if (typeof data.response === "string") {
-          try {
-            const parsed = JSON.parse(data.response);
-            if (parsed && parsed.order_id) {
-              orderObj = parsed;
-              isOrderStatus = true;
-            }
-          } catch (e) {}
-        } else if (data.response && data.response.order_id) {
-          orderObj = data.response;
+        
+        if (data && Array.isArray(data) && data.length > 0) {
+          const firstItem = data[0];
+          if (firstItem.output && firstItem.output.order_status) {
+            orderObj = firstItem.output.order_status;
+            isOrderStatus = true;
+          } else if (firstItem.output && firstItem.output.order) {
+            orderObj = firstItem.output.order;
+            isOrderStatus = true;
+          } else if (firstItem.output && firstItem.output.order_id) {
+            // Direct order data in output object
+            orderObj = firstItem.output;
+            isOrderStatus = true;
+          }
+        } else if (data && data.order_status) {
+          orderObj = data.order_status;
+          isOrderStatus = true;
+        } else if (data && data.order) {
+          orderObj = data.order;
+          isOrderStatus = true;
+        } else if (data && data.order_id) {
+          // Direct order data
+          orderObj = data;
           isOrderStatus = true;
         }
+        
         // Replace the loading message with the result
         setMessages((msgs) => {
           const newMsgs = [...msgs];
@@ -295,12 +318,16 @@ const ChatWidget = () => {
           if (isOrderStatus && orderObj) {
             newMsgs.push({ from: "bot", isOrderStatus: true, orderObj });
           } else {
-            newMsgs.push({ from: "bot", text: statusMsg });
+            newMsgs.push({ 
+              from: "bot", 
+              text: data.message || "Order status not found. Please check your order ID and try again." 
+            });
           }
           return newMsgs;
         });
         return;
       } catch (error) {
+        console.error("Error fetching order status from webhook:", error);
         setMessages((msgs) => [
           ...msgs.filter((m) => !m.isLoading),
           {
@@ -376,22 +403,37 @@ const ChatWidget = () => {
   };
 
   // Handle product variant selection
-  const handleVariantToggle = (variantId) => {
-    setSelectedVariants((prev) =>
-      prev.includes(variantId)
-        ? prev.filter((id) => id !== variantId)
-        : [...prev, variantId]
-    );
+  const handleVariantToggle = (variantId, messageIndex) => {
+    setMessages((msgs) => {
+      const newMsgs = [...msgs];
+      const message = newMsgs[messageIndex];
+      
+      if (message && message.searchResults) {
+        // Initialize selectedVariants if it doesn't exist
+        if (!message.selectedVariants) {
+          message.selectedVariants = [];
+        }
+        
+        // Toggle the variant selection
+        if (message.selectedVariants.includes(variantId)) {
+          message.selectedVariants = message.selectedVariants.filter(id => id !== variantId);
+        } else {
+          message.selectedVariants = [...message.selectedVariants, variantId];
+        }
+      }
+      
+      return newMsgs;
+    });
   };
 
   // Handle order button click
-  const handleOrder = async () => {
+  const handleOrder = async (productsToOrder, selectedVariantsToOrder) => {
     setOrdering(true);
     // Find selected product/variant details
     const selectedDetails = [];
-    products.forEach((product) => {
+    productsToOrder.forEach((product) => {
       product.variants.forEach((variant) => {
-        if (selectedVariants.includes(variant.id)) {
+        if (selectedVariantsToOrder.includes(variant.id)) {
           selectedDetails.push({
             productTitle: product.title,
             variantTitle: variant.title,
@@ -406,61 +448,58 @@ const ChatWidget = () => {
     // Show selected variants below the product grid
     setOrderedVariantsDetails(selectedDetails);
 
-    // Build order message
-    const variantIds = selectedDetails.map((d) => d.variantId).join(", ");
-    // Always use dummy email for orders
-    const loggedInUserEmail = "kiran@gmail.com";
-    const orderMessage ='Order These products: variant ID = ' + variantIds + ', email = "kiran@gmail.com"';
-    // Call the product search API as the order API
+    // Build order message for webhook
+    const variantIds = selectedDetails.map((detail) => detail.variantId).join(", ");
+    const orderMessage = `Order This product: variant ID = ${variantIds}, email = kiran@gmail.com`;
+
+    // Call the webhook to create order
     try {
       const response = await fetch(
-        "https://agent-prod.studio.lyzr.ai/v3/inference/chat/",
+        "https://somanparv.app.n8n.cloud/webhook/create-order-shopify",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": "sk-default-xKEgU0gl9uFfQliUrn6sNZzCoqVY9Kl1",
           },
           body: JSON.stringify({
-            user_id: "parvathi.somanahalli@concentrix.com",
-            agent_id: "68872e64c9c08f1592801e0f",
-            session_id: "68872e64c9c08f1592801e0f-23knoh3uucri",
-            message: orderMessage,
+            query: orderMessage
           }),
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      console.log("Order API Response:", data); // Debug log
+      console.log("Webhook Order Response:", data); // Debug log
 
-      let orderResultObj = data;
-      if (typeof data.response === "string") {
-        try {
-          orderResultObj = JSON.parse(data.response);
-          console.log("Parsed order result:", orderResultObj); // Debug log
-        } catch (e) {
-          console.error("Error parsing response:", e); // Debug log
-          orderResultObj = data;
-        }
+      // Check if order was created successfully
+      let orderCreatedData = null;
+
+      // Handle different response structures from n8n webhook
+      if (Array.isArray(data) && data.length > 0 && data[0].output && data[0].output.order_created) {
+        // n8n response wrapped in output object within an array
+        orderCreatedData = data[0].output.order_created;
+      } else if (data && data.output && data.output.order_created) {
+        // n8n response wrapped in output object (direct)
+        orderCreatedData = data.output.order_created;
+      } else if (data && data.order_created) {
+        // Direct order_created response
+        orderCreatedData = data.order_created;
+      } else if (data && data.order) {
+        // If the webhook returns the order directly
+        orderCreatedData = {
+          id: data.order.id,
+          order_id: data.order.name,
+          product: selectedDetails.map(d => d.productTitle).join(", "),
+          total_paid: data.order.total_price,
+          message: "Order placed successfully!"
+        };
       }
 
-      // Check if order was created successfully - handle different response formats
-      let orderData = null;
-
-      if (orderResultObj.order_created) {
-        orderData = orderResultObj.order_created;
-      } else if (orderResultObj.response) {
-        try {
-          const parsedResponse = JSON.parse(orderResultObj.response);
-          if (parsedResponse.order_created) {
-            orderData = parsedResponse.order_created;
-          }
-        } catch (e) {
-          console.error("Error parsing response.order_created:", e);
-        }
-      }
-
-      if (orderData) {
-        console.log("Order created successfully:", orderData); // Debug log
+      if (orderCreatedData) {
+        console.log("Order created successfully:", orderCreatedData); // Debug log
 
         setMessages((msgs) => {
           let newMsgs = [...msgs];
@@ -470,7 +509,7 @@ const ChatWidget = () => {
           newMsgs.push({
             from: "bot",
             isOrderCreated: true,
-            orderCreatedObj: orderData,
+            orderCreatedObj: orderCreatedData,
           });
           newMsgs.push({
             from: "bot",
@@ -480,44 +519,13 @@ const ChatWidget = () => {
         });
         setOrderResult(null);
       } else {
-        console.log("Order creation failed:", orderResultObj); // Debug log
-
-        // Try to extract order information from the response even if parsing failed
-        if (orderResultObj.response) {
-          try {
-            const responseText = orderResultObj.response;
-            if (
-              responseText.includes("order_created") &&
-              responseText.includes("id")
-            ) {
-              // Show a generic success message with the response
-              setMessages((msgs) => {
-                let newMsgs = [...msgs];
-                while (
-                  newMsgs.length &&
-                  newMsgs[newMsgs.length - 1].isLoading
-                ) {
-                  newMsgs.pop();
-                }
-                newMsgs.push({
-                  from: "bot",
-                  text: "Order placed successfully! Check the response details in the console for order information.",
-                });
-                return newMsgs;
-              });
-              setOrderResult(null);
-              return;
-            }
-          } catch (e) {
-            console.error("Error processing response:", e);
-          }
-        }
-
+        console.log("Order creation failed:", data); // Debug log
         setOrderResult(
-          orderResultObj.message || "Failed to place order. Please try again."
+          data.message || "Failed to place order. Please try again."
         );
       }
     } catch (error) {
+      console.error("Error creating order:", error);
       setOrderResult("Failed to place order. Please try again.");
     }
     setOrdering(false);
@@ -533,6 +541,7 @@ const ChatWidget = () => {
     setSelectedVariants([]);
     setOrderedVariantsDetails([]);
     setOrderResult(null);
+    setShowProductGrid(false);
     setMessages(getInitialMessages());
   };
 
@@ -689,13 +698,13 @@ const ChatWidget = () => {
                               "Here are the products matching your search:" ||
                               msg.text ===
                                 "Sorry, No products found for your search. Here are some products for you to choose from") &&
-                              products.length > 0 && (
+                              msg.searchResults && msg.searchResults.length > 0 && (
                                 <div className="mt-6">
                                   <div className="mb-2 font-semibold text-blue-900">
                                     Select products to order:
                                   </div>
                                   <div className="grid grid-cols-2 gap-4">
-                                    {products.map((product) => (
+                                    {msg.searchResults.map((product) => (
                                       <div
                                         key={product.id}
                                         className="bg-white rounded-lg shadow p-4 flex flex-col items-center"
@@ -725,12 +734,13 @@ const ChatWidget = () => {
                                             >
                                               <input
                                                 type="checkbox"
-                                                checked={selectedVariants.includes(
+                                                checked={msg.selectedVariants && msg.selectedVariants.includes(
                                                   variant.id
                                                 )}
                                                 onChange={() =>
                                                   handleVariantToggle(
-                                                    variant.id
+                                                    variant.id,
+                                                    idx
                                                   )
                                                 }
                                               />
@@ -744,13 +754,13 @@ const ChatWidget = () => {
                                       </div>
                                     ))}
                                   </div>
-                                  {selectedVariants.length > 0 && (
+                                  {msg.selectedVariants && msg.selectedVariants.length > 0 && (
                                     <div className="w-full flex justify-center mt-6">
-                                      <button
-                                        className="bg-blue-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-600 transition"
-                                        onClick={handleOrder}
-                                        disabled={ordering}
-                                      >
+                                                                              <button
+                                          className="bg-blue-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-600 transition"
+                                          onClick={() => handleOrder(msg.searchResults, msg.selectedVariants || [])}
+                                          disabled={ordering}
+                                        >
                                         {ordering ? "Ordering..." : "Order"}
                                       </button>
                                     </div>
