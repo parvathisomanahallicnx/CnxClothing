@@ -748,10 +748,9 @@ const ChatWidget = () => {
                                                   )
                                                 }
                                               />
-                                              <span>
-                                                {variant.title} - $
-                                                {variant.price}
-                                              </span>
+                                                                                             <span>
+                                                 {variant.title} - {variant.price}
+                                               </span>
                                             </label>
                                           ))}
                                         </div>
