@@ -4,6 +4,7 @@ import SampleNextArrow from "../NewArrivals/SampleNextArrow";
 import SamplePrevArrow from "../NewArrivals/SamplePrevArrow";
 import Heading from "../Products/Heading";
 import Product from "../Products/Product";
+import useHomePageContent from "../../../constants/AEM_content/homePage_content";
 
 function getUniqueRandomProducts(products, count) {
   const unique = [];
@@ -19,7 +20,16 @@ function getUniqueRandomProducts(products, count) {
   return unique;
 }
 
+function extractSectionTitle(pageData, key) {
+  return (
+    pageData?.[":items"]?.root?.[":items"]?.container?.[":items"]?.container?.[":items"]?.[key]?.text ||
+    ""
+  );
+}
+
 const BestSellers = ({ products = [] }) => {
+  const { pageData } = useHomePageContent();
+  const heading = extractSectionTitle(pageData, "best sellers") || "Best Sellers";
   const settings = {
     infinite: true,
     speed: 500,
@@ -57,7 +67,7 @@ const BestSellers = ({ products = [] }) => {
   const bestSellerProducts = getUniqueRandomProducts(products, 5);
   return (
     <div className="w-full pb-16">
-      <Heading heading="Best Sellers" />
+      <Heading heading={heading} />
       <Slider {...settings}>
         {bestSellerProducts.map((product) => (
           <div className="px-2" key={product._id}>
