@@ -6,7 +6,6 @@ import {
   FaClock,
   FaDollarSign,
   FaExclamationTriangle,
-  FaEye,
   FaShoppingBag,
   FaTruck,
 } from "react-icons/fa";
@@ -179,8 +178,7 @@ const Orders = () => {
                     <div>
                       <p className="text-gray-500">Total</p>
                       <p className="font-bold text-gray-900">
-                        {order.totalPriceV2.amount}{" "}
-                        {order.totalPriceV2.currencyCode}
+                        ₹{order.totalPriceV2.amount}
                       </p>
                     </div>
                   </div>
@@ -209,9 +207,8 @@ const Orders = () => {
                             {node.title}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Qty: {node.quantity} •{" "}
-                            {node.variant?.priceV2?.amount}{" "}
-                            {node.variant?.priceV2?.currencyCode}
+                            Qty: {node.quantity} • ₹
+                            {node.variant?.priceV2?.amount}
                           </p>
                         </div>
                       </div>

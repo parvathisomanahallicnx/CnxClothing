@@ -62,7 +62,7 @@ const ChatWidget = () => {
     setOrderedVariantsDetails([]);
     setOrderResult(null);
     setShowProductGrid(false);
-    
+
     // Clear all messages and start fresh for the new context
     if (option.value === "products") {
       setMessages([
@@ -96,7 +96,7 @@ const ChatWidget = () => {
       // Clear previous order details when starting a new search
       setOrderedVariantsDetails([]);
       setOrderResult(null);
-      
+
       // Add user message and a bot loading message
       setMessages((msgs) => [
         ...msgs,
@@ -107,7 +107,7 @@ const ChatWidget = () => {
       setLoadingProducts(true);
 
       let products = [];
-      
+
       try {
         // Call the webhook to get products
         const response = await fetch(
@@ -120,14 +120,14 @@ const ChatWidget = () => {
             body: `query=${encodeURIComponent(userInput)}`,
           }
         );
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log("Webhook response:", data);
-        
+
         // Extract products from the webhook response
         if (data && Array.isArray(data) && data.length > 0) {
           const firstItem = data[0];
@@ -135,7 +135,7 @@ const ChatWidget = () => {
             products = firstItem.output.products;
           }
         }
-        
+
         // If no products found from webhook, use fallback products
         if (!Array.isArray(products) || products.length === 0) {
           console.log("No products found from webhook, using fallback");
@@ -204,9 +204,7 @@ const ChatWidget = () => {
             id: 9257123905753,
             title: "Black Beanbag",
             product_type: "Indoor",
-            variants: [
-              { id: 46818113716441, title: "Plain", price: "69.99" },
-            ],
+            variants: [{ id: 46818113716441, title: "Plain", price: "69.99" }],
             images: [
               {
                 id: 45822919770329,
@@ -273,18 +271,18 @@ const ChatWidget = () => {
             body: `query=Track my order ${userInput}`,
           }
         );
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log("Order Status Webhook Response:", data);
-        
+
         // Extract order status from the webhook response
         let orderObj = null;
         let isOrderStatus = false;
-        
+
         if (data && Array.isArray(data) && data.length > 0) {
           const firstItem = data[0];
           if (firstItem.output && firstItem.output.order_status) {
@@ -309,7 +307,7 @@ const ChatWidget = () => {
           orderObj = data;
           isOrderStatus = true;
         }
-        
+
         // Replace the loading message with the result
         setMessages((msgs) => {
           const newMsgs = [...msgs];
@@ -322,9 +320,11 @@ const ChatWidget = () => {
           if (isOrderStatus && orderObj) {
             newMsgs.push({ from: "bot", isOrderStatus: true, orderObj });
           } else {
-            newMsgs.push({ 
-              from: "bot", 
-              text: data.message || "Order status not found. Please check your order ID and try again." 
+            newMsgs.push({
+              from: "bot",
+              text:
+                data.message ||
+                "Order status not found. Please check your order ID and try again.",
             });
           }
           return newMsgs;
@@ -411,21 +411,23 @@ const ChatWidget = () => {
     setMessages((msgs) => {
       const newMsgs = [...msgs];
       const message = newMsgs[messageIndex];
-      
+
       if (message && message.searchResults) {
         // Initialize selectedVariants if it doesn't exist
         if (!message.selectedVariants) {
           message.selectedVariants = [];
         }
-        
+
         // Toggle the variant selection
         if (message.selectedVariants.includes(variantId)) {
-          message.selectedVariants = message.selectedVariants.filter(id => id !== variantId);
+          message.selectedVariants = message.selectedVariants.filter(
+            (id) => id !== variantId
+          );
         } else {
           message.selectedVariants = [...message.selectedVariants, variantId];
         }
       }
-      
+
       return newMsgs;
     });
   };
@@ -453,7 +455,9 @@ const ChatWidget = () => {
     setOrderedVariantsDetails(selectedDetails);
 
     // Build order message for webhook
-    const variantIds = selectedDetails.map((detail) => detail.variantId).join(", ");
+    const variantIds = selectedDetails
+      .map((detail) => detail.variantId)
+      .join(", ");
     const orderMessage = `Order This product: variant ID = ${variantIds}, email = kiran@gmail.com`;
 
     // Call the webhook to create order
@@ -466,15 +470,15 @@ const ChatWidget = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            query: orderMessage
+            query: orderMessage,
           }),
         }
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       console.log("Webhook Order Response:", data); // Debug log
 
@@ -482,7 +486,12 @@ const ChatWidget = () => {
       let orderCreatedData = null;
 
       // Handle different response structures from n8n webhook
-      if (Array.isArray(data) && data.length > 0 && data[0].output && data[0].output.order_created) {
+      if (
+        Array.isArray(data) &&
+        data.length > 0 &&
+        data[0].output &&
+        data[0].output.order_created
+      ) {
         // n8n response wrapped in output object within an array
         orderCreatedData = data[0].output.order_created;
       } else if (data && data.output && data.output.order_created) {
@@ -496,9 +505,9 @@ const ChatWidget = () => {
         orderCreatedData = {
           id: data.order.id,
           order_id: data.order.name,
-          product: selectedDetails.map(d => d.productTitle).join(", "),
+          product: selectedDetails.map((d) => d.productTitle).join(", "),
           total_paid: data.order.total_price,
-          message: "Order placed successfully!"
+          message: "Order placed successfully!",
         };
       }
 
@@ -702,7 +711,8 @@ const ChatWidget = () => {
                               "Here are the products matching your search:" ||
                               msg.text ===
                                 "Sorry, No products found for your search. Here are some products for you to choose from") &&
-                              msg.searchResults && msg.searchResults.length > 0 && (
+                              msg.searchResults &&
+                              msg.searchResults.length > 0 && (
                                 <div className="mt-6">
                                   <div className="mb-2 font-semibold text-blue-900">
                                     Select products to order:
@@ -738,9 +748,12 @@ const ChatWidget = () => {
                                             >
                                               <input
                                                 type="checkbox"
-                                                checked={msg.selectedVariants && msg.selectedVariants.includes(
-                                                  variant.id
-                                                )}
+                                                checked={
+                                                  msg.selectedVariants &&
+                                                  msg.selectedVariants.includes(
+                                                    variant.id
+                                                  )
+                                                }
                                                 onChange={() =>
                                                   handleVariantToggle(
                                                     variant.id,
@@ -748,26 +761,33 @@ const ChatWidget = () => {
                                                   )
                                                 }
                                               />
-                                                                                             <span>
-                                                 {variant.title} - {variant.price}
-                                               </span>
+                                              <span>
+                                                {variant.title} - ₹
+                                                {variant.price}
+                                              </span>
                                             </label>
                                           ))}
                                         </div>
                                       </div>
                                     ))}
                                   </div>
-                                  {msg.selectedVariants && msg.selectedVariants.length > 0 && (
-                                    <div className="w-full flex justify-center mt-6">
-                                                                              <button
+                                  {msg.selectedVariants &&
+                                    msg.selectedVariants.length > 0 && (
+                                      <div className="w-full flex justify-center mt-6">
+                                        <button
                                           className="bg-blue-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-600 transition"
-                                          onClick={() => handleOrder(msg.searchResults, msg.selectedVariants || [])}
+                                          onClick={() =>
+                                            handleOrder(
+                                              msg.searchResults,
+                                              msg.selectedVariants || []
+                                            )
+                                          }
                                           disabled={ordering}
                                         >
-                                        {ordering ? "Ordering..." : "Order"}
-                                      </button>
-                                    </div>
-                                  )}
+                                          {ordering ? "Ordering..." : "Order"}
+                                        </button>
+                                      </div>
+                                    )}
                                   {/* Show ordered variants details below the product grid */}
                                   {orderedVariantsDetails.length > 0 && (
                                     <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -778,7 +798,7 @@ const ChatWidget = () => {
                                         {orderedVariantsDetails.map((d, i) => (
                                           <li key={i} className="text-blue-900">
                                             {d.productTitle} - {d.variantTitle}{" "}
-                                            (${d.price})
+                                            (₹{d.price})
                                           </li>
                                         ))}
                                       </ul>
