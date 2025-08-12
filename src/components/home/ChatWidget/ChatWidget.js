@@ -112,7 +112,7 @@ const ChatWidget = () => {
       try {
         // Call the webhook to get products
         const response = await fetch(
-          "https://somanparv.app.n8n.cloud/webhook/get-shopify-products",
+          "https://parvasoman.app.n8n.cloud/webhook/get-shopify-products",
           {
             method: "POST",
             headers: {
@@ -322,7 +322,7 @@ const ChatWidget = () => {
       try {
         // Call the webhook to get order status
         const response = await fetch(
-          "https://somanparv.app.n8n.cloud/webhook/order-status-shopify",
+          "https://parvasoman.app.n8n.cloud/webhook/order-status-shopify",
           {
             method: "POST",
             headers: {
@@ -610,7 +610,7 @@ const ChatWidget = () => {
     // Call the webhook to create order
     try {
       const response = await fetch(
-        "https://somanparv.app.n8n.cloud/webhook/create-order-shopify",
+        "https://parvasoman.app.n8n.cloud/webhook/create-order-shopify",
         {
           method: "POST",
           headers: {
