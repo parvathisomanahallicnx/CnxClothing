@@ -91,6 +91,7 @@ const ChatWidget = () => {
     if (!userInput.trim()) return;
     // If context is not selected, do nothing (force user to pick context first)
     if (!context) return;
+    
     // --- Product Search Flow ---
     if (context === "products") {
       // Clear previous order details when starting a new search
@@ -128,17 +129,57 @@ const ChatWidget = () => {
         const data = await response.json();
         console.log("Webhook response:", data);
 
-        // Extract products from the webhook response
-        if (data && Array.isArray(data) && data.length > 0) {
-          const firstItem = data[0];
-          if (firstItem.output && firstItem.output.products) {
-            products = firstItem.output.products;
+        // Handle different response formats and potential errors
+        if (data && typeof data === 'object') {
+          // Check for error messages in the response
+          if (data.error || data.message) {
+            console.error("n8n Agent Error:", data.error || data.message);
+            
+            // Handle specific format_final_json_response tool error
+            if (data.message && data.message.includes('format_final_json_response')) {
+              setMessages((msgs) => [
+                ...msgs.slice(0, -1), // Remove loading message
+                { 
+                  from: "bot", 
+                  text: "I'm experiencing a technical issue with my response formatting. Please try rephrasing your search query or contact support if the issue persists." 
+                }
+              ]);
+              setLoadingProducts(false);
+              return;
+            }
+            
+            // Handle other n8n errors
+            setMessages((msgs) => [
+              ...msgs.slice(0, -1), // Remove loading message
+              { 
+                from: "bot", 
+                text: `Sorry, I encountered an error: ${data.message || data.error}. Please try again or contact support.` 
+              }
+            ]);
+            setLoadingProducts(false);
+            return;
+          }
+
+          // Extract products from the webhook response
+          if (Array.isArray(data) && data.length > 0) {
+            const firstItem = data[0];
+            if (firstItem.output && firstItem.output.products) {
+              products = firstItem.output.products;
+            }
+          } else if (data.products) {
+            // Direct products array
+            products = data.products;
+          } else if (data.output && data.output.products) {
+            // Nested output structure
+            products = data.output.products;
           }
         }
 
         // If no products found from webhook, use fallback products
+        let usingFallbackProducts = false;
         if (!Array.isArray(products) || products.length === 0) {
           console.log("No products found from webhook, using fallback");
+          usingFallbackProducts = true;
           products = [
             {
               id: 9257124200665,
@@ -178,72 +219,91 @@ const ChatWidget = () => {
         }
       } catch (error) {
         console.error("Error fetching products from webhook:", error);
-        // Use fallback products on error
-        products = [
-          {
-            id: 9257124200665,
-            title: "Example T-Shirt",
-            product_type: "Shirts",
-            variants: [
-              {
-                id: 46818115715289,
-                title: "Extra Small",
-                price: "25.00",
-              },
-              { id: 46818115748057, title: "Small", price: "19.99" },
-              { id: 46818115780825, title: "Medium", price: "19.99" },
-            ],
-            images: [
-              {
-                id: 45822922850521,
-                src: "https://cdn.shopify.com/s/files/1/0755/5419/3625/files/green-t-shirt.jpg?v=1752674862",
-              },
-            ],
-          },
-          {
-            id: 9257123905753,
-            title: "Black Beanbag",
-            product_type: "Indoor",
-            variants: [{ id: 46818113716441, title: "Plain", price: "69.99" }],
-            images: [
-              {
-                id: 45822919770329,
-                src: "https://cdn.shopify.com/s/files/1/0755/5419/3625/files/comfortable-living-room-cat_925x_cac032a2-6215-4cac-b02f-01e45f24dbe8.jpg?v=1752674759",
-              },
-            ],
-          },
-        ];
+        
+        // Handle network or parsing errors
+        setMessages((msgs) => [
+          ...msgs.slice(0, -1), // Remove loading message
+          { 
+            from: "bot", 
+            text: "Sorry, I'm having trouble connecting to the product database. Please try again in a moment or contact support if the issue persists." 
+          }
+        ]);
+        setLoadingProducts(false);
+        return;
       }
 
-      setLoadingProducts(false);
-      setProducts(products);
-      setShowProductGrid(true);
-      setMessages((msgs) => {
-        const newMsgs = [...msgs];
-        const lastLoadingIdx = newMsgs
-          .map((m) => m.isLoading)
-          .lastIndexOf(true);
-        if (lastLoadingIdx !== -1) {
-          if (products.length > 0 && products[0].id !== 9257124200665) {
-            // Real products found from webhook
-            newMsgs[lastLoadingIdx] = {
-              from: "bot",
-              text: "Here are the products matching your search:",
-              searchResults: products, // Store products in the message
-              searchQuery: userInput, // Store the search query
-            };
-          } else {
-            // Using fallback products
-            newMsgs[lastLoadingIdx] = {
-              from: "bot",
-              text: "Sorry, No products found for your search. Here are some products for you to choose from",
-              searchResults: products, // Store fallback products in the message
-              searchQuery: userInput, // Store the search query
-            };
-          }
-        }
-        return newMsgs;
-      });
+             setLoadingProducts(false);
+       setProducts(products);
+       setShowProductGrid(true);
+       
+       // Generate personalized message based on search query
+       const getPersonalizedMessage = (query) => {
+         const lowerQuery = query.toLowerCase();
+         
+         // Get user's first name from session storage
+         let userName = "there";
+         try {
+           const shopifyUser = sessionStorage.getItem("shopifyUser");
+           if (shopifyUser) {
+             const userData = JSON.parse(shopifyUser);
+             userName = userData.firstName || userData.email?.split('@')[0] || "there";
+           } else {
+             // Fallback to email if no user data
+             userName = localStorage.getItem("userEmail")?.split('@')[0] || "there";
+           }
+         } catch (error) {
+           console.error("Error parsing user data:", error);
+           userName = localStorage.getItem("userEmail")?.split('@')[0] || "there";
+         }
+         
+         if (lowerQuery.includes('dress') || lowerQuery.includes('shirt') || lowerQuery.includes('top') || lowerQuery.includes('blouse')) {
+           return `🎯 Hey ${userName}! Based on your amazing style choices, I'd recommend Medium size - it's been your perfect fit! ✨`;
+         } else if (lowerQuery.includes('sneaker') || lowerQuery.includes('shoe') || lowerQuery.includes('footwear') || lowerQuery.includes('boot')) {
+           return `🎯 Hey ${userName}! Your previous sneaker picks show Size 6 is your Good Fit - perfect for comfort and style! 👟`;
+         } else if (lowerQuery.includes('jeans') || lowerQuery.includes('pant') || lowerQuery.includes('trouser')) {
+           return `🎯 Hey ${userName}! Looking at your style preferences, Size 30-32 would be perfect for you! 👖`;
+         } else if (lowerQuery.includes('jacket') || lowerQuery.includes('coat') || lowerQuery.includes('blazer')) {
+           return `🎯 Hey ${userName}! Your outerwear choices suggest Medium/Large would be ideal for the perfect fit! 🧥`;
+         }
+         return null;
+       };
+
+       const personalizedMessage = getPersonalizedMessage(userInput);
+
+       setMessages((msgs) => {
+         const newMsgs = [...msgs];
+         const lastLoadingIdx = newMsgs
+           .map((m) => m.isLoading)
+           .lastIndexOf(true);
+         if (lastLoadingIdx !== -1) {
+           if (products.length > 0 && products[0].id !== 9257124200665) {
+             // Real products found from webhook
+             newMsgs[lastLoadingIdx] = {
+               from: "bot",
+               text: "Here are the products matching your search:",
+               searchResults: products, // Store products in the message
+               searchQuery: userInput, // Store the search query
+             };
+           } else {
+             // Using fallback products
+             newMsgs[lastLoadingIdx] = {
+               from: "bot",
+               text: "Sorry, No products found for your search. Here are some products for you to choose from",
+               searchResults: products, // Store fallback products in the message
+               searchQuery: userInput, // Store the search query
+             };
+           }
+           
+           // Add personalized message to the product results message if real products are found
+           if (personalizedMessage && products.length > 0 && products[0].id !== 9257124200665) {
+             // Add personalized message to the existing product results message
+             if (lastLoadingIdx !== -1) {
+               newMsgs[lastLoadingIdx].personalizedMessage = personalizedMessage;
+             }
+           }
+         }
+         return newMsgs;
+       });
       return;
     }
     if (context === "orders_status") {
@@ -278,6 +338,50 @@ const ChatWidget = () => {
 
         const data = await response.json();
         console.log("Order Status Webhook Response:", data);
+
+        // Handle different response formats and potential errors
+        if (data && typeof data === 'object') {
+          // Check for error messages in the response
+          if (data.error || data.message) {
+            console.error("n8n Order Status Error:", data.error || data.message);
+            
+            // Handle specific format_final_json_response tool error
+            if (data.message && data.message.includes('format_final_json_response')) {
+              setMessages((msgs) => {
+                const newMsgs = [...msgs];
+                const lastLoadingIdx = newMsgs
+                  .map((m) => m.isLoading)
+                  .lastIndexOf(true);
+                if (lastLoadingIdx !== -1) {
+                  newMsgs.splice(lastLoadingIdx, 1);
+                }
+                newMsgs.push({
+                  from: "bot",
+                  text: "I'm experiencing a technical issue with order status checking. Please try again or contact support if the issue persists.",
+                });
+                return newMsgs;
+              });
+              return;
+            }
+            
+            // Handle other n8n errors
+            setMessages((msgs) => {
+              const newMsgs = [...msgs];
+              const lastLoadingIdx = newMsgs
+                .map((m) => m.isLoading)
+                .lastIndexOf(true);
+              if (lastLoadingIdx !== -1) {
+                newMsgs.splice(lastLoadingIdx, 1);
+              }
+              newMsgs.push({
+                from: "bot",
+                text: `Sorry, I encountered an error: ${data.message || data.error}. Please try again or contact support.`,
+              });
+              return newMsgs;
+            });
+            return;
+          }
+        }
 
         // Extract order status from the webhook response
         let orderObj = null;
@@ -343,7 +447,6 @@ const ChatWidget = () => {
       return;
     }
     if (context === "support") {
-      const apiUrl = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
       setMessages((msgs) => [
         ...msgs,
         { from: "user", text: userInput },
@@ -351,6 +454,8 @@ const ChatWidget = () => {
       ]);
       setInput("");
       try {
+        // Call the new API endpoint
+        const apiUrl = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
@@ -364,13 +469,54 @@ const ChatWidget = () => {
             message: userInput,
           }),
         });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
-        let botMessage =
-          data.response ||
-          data.message ||
-          data.title ||
-          data.body ||
-          "Received response from API.";
+        console.log("General queries webhook response:", data);
+
+        let botMessage = "I couldn't find specific information about that. Please try rephrasing your question or contact our support team.";
+
+        // Handle different response formats and potential errors
+        if (data && typeof data === 'object') {
+          // Check for error messages in the response
+          if (data.error || data.message) {
+            console.error("n8n General Queries Error:", data.error || data.message);
+            
+            // Handle specific format_final_json_response tool error
+            if (data.message && data.message.includes('format_final_json_response')) {
+              botMessage = "I'm experiencing a technical issue with my response formatting. Please try rephrasing your question or contact support if the issue persists.";
+            } else if (data.message && data.message.includes('not registered')) {
+              botMessage = "I'm currently experiencing connectivity issues. Please try again in a moment or contact our support team.";
+            } else {
+              botMessage = `Sorry, I encountered an error: ${data.message || data.error}. Please try again or contact support.`;
+            }
+          } else {
+            // Extract response from different possible structures
+            if (data.response) {
+              botMessage = data.response;
+            } else if (data.answer) {
+              botMessage = data.answer;
+            } else if (data.text) {
+              botMessage = data.text;
+            } else if (data.message) {
+              botMessage = data.message;
+            } else if (Array.isArray(data) && data.length > 0) {
+              // Handle array response format
+              const firstItem = data[0];
+              if (firstItem.output && firstItem.output.response) {
+                botMessage = firstItem.output.response;
+              } else if (firstItem.output && firstItem.output.answer) {
+                botMessage = firstItem.output.answer;
+              } else if (firstItem.output && firstItem.output.text) {
+                botMessage = firstItem.output.text;
+              }
+            }
+          }
+        }
+
         // Replace the waiting message with the actual response
         setMessages((msgs) => {
           const newMsgs = [...msgs];
@@ -382,20 +528,17 @@ const ChatWidget = () => {
           }
           newMsgs.push({
             from: "bot",
-            text:
-              typeof botMessage === "string"
-                ? botMessage
-                : JSON.stringify(botMessage),
+            text: botMessage,
           });
           return newMsgs;
         });
-        return;
       } catch (error) {
+        console.error("Error fetching general query response:", error);
         setMessages((msgs) => [
           ...msgs.filter((m) => !m.isLoading),
           {
             from: "bot",
-            text: "Sorry, there was an error contacting the API.",
+            text: "Sorry, I'm having trouble processing your request. Please try again in a moment or contact our support team.",
           },
         ]);
       }
@@ -407,7 +550,7 @@ const ChatWidget = () => {
   };
 
   // Handle product variant selection
-  const handleVariantToggle = (variantId, messageIndex) => {
+  const handleVariantToggle = (variantId, productId, messageIndex) => {
     setMessages((msgs) => {
       const newMsgs = [...msgs];
       const message = newMsgs[messageIndex];
@@ -415,16 +558,19 @@ const ChatWidget = () => {
       if (message && message.searchResults) {
         // Initialize selectedVariants if it doesn't exist
         if (!message.selectedVariants) {
-          message.selectedVariants = [];
+          message.selectedVariants = {};
         }
 
         // Toggle the variant selection
-        if (message.selectedVariants.includes(variantId)) {
-          message.selectedVariants = message.selectedVariants.filter(
+        if (!message.selectedVariants[productId]) {
+          message.selectedVariants[productId] = [];
+        }
+        if (message.selectedVariants[productId].includes(variantId)) {
+          message.selectedVariants[productId] = message.selectedVariants[productId].filter(
             (id) => id !== variantId
           );
         } else {
-          message.selectedVariants = [...message.selectedVariants, variantId];
+          message.selectedVariants[productId] = [...message.selectedVariants[productId], variantId];
         }
       }
 
@@ -438,8 +584,9 @@ const ChatWidget = () => {
     // Find selected product/variant details
     const selectedDetails = [];
     productsToOrder.forEach((product) => {
+      const selectedForProduct = selectedVariantsToOrder[product.id] || [];
       product.variants.forEach((variant) => {
-        if (selectedVariantsToOrder.includes(variant.id)) {
+        if (selectedForProduct.includes(variant.id)) {
           selectedDetails.push({
             productTitle: product.title,
             variantTitle: variant.title,
@@ -481,6 +628,32 @@ const ChatWidget = () => {
 
       const data = await response.json();
       console.log("Webhook Order Response:", data); // Debug log
+
+      // Handle different response formats and potential errors
+      if (data && typeof data === 'object') {
+        // Check for error messages in the response
+        if (data.error || data.message) {
+          console.error("n8n Order Creation Error:", data.error || data.message);
+          
+          // Handle specific format_final_json_response tool error
+          if (data.message && data.message.includes('format_final_json_response')) {
+            setOrderResult({
+              error: true,
+              message: "I'm experiencing a technical issue with order processing. Please try again or contact support if the issue persists."
+            });
+            setOrdering(false);
+            return;
+          }
+          
+          // Handle other n8n errors
+          setOrderResult({
+            error: true,
+            message: `Sorry, I encountered an error: ${data.message || data.error}. Please try again or contact support.`
+          });
+          setOrdering(false);
+          return;
+        }
+      }
 
       // Check if order was created successfully
       let orderCreatedData = null;
@@ -748,15 +921,11 @@ const ChatWidget = () => {
                                             >
                                               <input
                                                 type="checkbox"
-                                                checked={
-                                                  msg.selectedVariants &&
-                                                  msg.selectedVariants.includes(
-                                                    variant.id
-                                                  )
-                                                }
+                                                checked={msg.selectedVariants && msg.selectedVariants[product.id]?.includes(variant.id)}
                                                 onChange={() =>
                                                   handleVariantToggle(
                                                     variant.id,
+                                                    product.id,
                                                     idx
                                                   )
                                                 }
@@ -771,15 +940,23 @@ const ChatWidget = () => {
                                       </div>
                                     ))}
                                   </div>
+                                  {/* Display personalized message below the product grid */}
+                                  {msg.personalizedMessage && (
+                                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                      <span className="text-blue-900 font-medium">
+                                        {msg.personalizedMessage}
+                                      </span>
+                                    </div>
+                                  )}
                                   {msg.selectedVariants &&
-                                    msg.selectedVariants.length > 0 && (
+                                    Object.keys(msg.selectedVariants).length > 0 && (
                                       <div className="w-full flex justify-center mt-6">
                                         <button
                                           className="bg-blue-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-600 transition"
                                           onClick={() =>
                                             handleOrder(
                                               msg.searchResults,
-                                              msg.selectedVariants || []
+                                              msg.selectedVariants || {}
                                             )
                                           }
                                           disabled={ordering}
@@ -788,7 +965,7 @@ const ChatWidget = () => {
                                         </button>
                                       </div>
                                     )}
-                                  {/* Show ordered variants details below the product grid */}
+                                  {/* Show ordered variants details below the order button */}
                                   {orderedVariantsDetails.length > 0 && (
                                     <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
                                       <div className="font-semibold text-blue-900 mb-2">
